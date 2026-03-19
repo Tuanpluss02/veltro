@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "veltro", about = "Fast Dart code generation")]
+#[command(name = "veltro", bin_name = "veltro", about = "Fast Dart code generation")]
 pub struct Cli {
     /// The subcommand to execute.
     #[command(subcommand)]
