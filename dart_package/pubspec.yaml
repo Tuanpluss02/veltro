@@ -1,0 +1,9 @@
+name: veltro
+description: >-
+  Annotations for Veltro — the fast Rust-powered Dart code generator.
+  Add @Data() to a class and run `veltro build`.
+version: 0.1.0
+repository: https://github.com/your-username/veltro
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
