@@ -2,7 +2,7 @@ name: veltro
 description: >-
   Annotations for Veltro — the fast Rust-powered Dart code generator.
   Add @Data() to a class and run `veltro build`.
-version: 0.0.2
+version: 0.0.1
 repository: https://github.com/your-username/veltro
 
 environment:
@@ -14,6 +14,3 @@ dependencies:
 
 dev_dependencies:
   lints: ^5.1.1
-
-executables:
-  veltro:

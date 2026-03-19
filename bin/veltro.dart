@@ -14,10 +14,10 @@ import 'package:pub_updater/pub_updater.dart';
 const _packageName = 'veltro';
 
 /// GitHub repository for release downloads.
-const _repo = 'tuanpluss02/veltro';
+const _repo = 'Tuanpluss02/veltro_core';
 
 /// Must match the version in pubspec.yaml.
-const _version = '0.0.2';
+const _version = '0.0.1';
 
 /// Cache directory for downloaded binaries.
 String get _cacheDir {
@@ -55,7 +55,7 @@ String _architecture() {
 /// Downloads and caches the binary if needed.
 Future<String> _ensureBinary() async {
   final platform = _platform();
-  final binaryName = 'veltro-$_version-$platform';
+  final binaryName = 'veltro_core-$_version-$platform';
   final binaryPath = '$_cacheDir/$binaryName';
 
   if (File(binaryPath).existsSync()) {
@@ -64,7 +64,7 @@ Future<String> _ensureBinary() async {
 
   Directory(_cacheDir).createSync(recursive: true);
 
-  final assetName = 'veltro-$platform';
+  final assetName = 'veltro_core-$platform';
   final url =
       'https://github.com/$_repo/releases/download/v$_version/$assetName';
 
@@ -74,7 +74,8 @@ Future<String> _ensureBinary() async {
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) {
       stderr.writeln(
-          '  Error: Failed to download binary (${response.statusCode})');
+        '  Error: Failed to download binary (${response.statusCode})',
+      );
       stderr.writeln('  URL: $url');
       exit(1);
     }
