@@ -1,39 +1,81 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# Veltro
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages). 
+Veltro is a blazingly fast Dart code generator powered by Rust. It automatically generates `fromJson`, `toJson`, `copyWith`, `==`, `hashCode`, and `toString` methods for your Dart data classes using the Freezed/built_value mixin pattern.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages). 
--->
-
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
 
 ## Features
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+- **Rust-powered**: Full builds take milliseconds, not seconds.
+- **Mixin Pattern**: Safe, clean, and extensible generated code (`with _$ClassName`).
+- **Smart Caching**: Content hashing ensures files are only written when changed.
+- **Zero Config**: Scans `lib/` recursively. No `build.yaml` needed.
+- **Cross Platform**: Pre-compiled binaries for macOS (Apple Silicon + Intel) and Linux.
 
-## Getting started
+## Installation
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+Activate the Veltro CLI globally:
+
+```bash
+dart pub global activate veltro
+```
+
+Or add it to your project's `dev_dependencies`:
+
+```yaml
+dev_dependencies:
+  veltro: ^0.0.1
+```
 
 ## Usage
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
+### 1. Annotate your classes
+
+Use the `@Data()` annotation and the `with _$ClassName` mixin on your classes. 
 
 ```dart
-const like = 'sample';
+import 'package:veltro/veltro.dart';
+
+part 'user.g.dart';
+
+@Data()
+abstract class User with _$User {
+  const factory User({
+    required String id,
+    required String name,
+    required int age,
+  }) = _User;
+
+  factory User.fromJson(Map<String, dynamic> json) => _$UserFromJson(json);
+}
 ```
 
-## Additional information
+### 2. Run Veltro
 
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+```bash
+veltro build
+```
+
+This will instantly generate all `.g.dart` files across your `lib/` directory.
+
+### CLI Commands
+
+- `veltro build`: Scan `lib/`, generate all `.g.dart` files, and exit.
+- `veltro watch`: Run build, then watch `lib/` for changes continuously.
+- `veltro clean`: Delete all generated `.g.dart` files under `lib/`.
+
+## For Maintainers: Releasing a New Version
+
+Veltro uses a synchronized versioning system across its Rust binary (`Cargo.toml`), Dart package (`pubspec.yaml`), and CLI launcher (`bin/veltro.dart`).
+
+To publish a new version, run the included `bump.dart` script:
+
+```bash
+cd dart_package
+dart run tool/bump.dart <new_version>
+# Example: dart run tool/bump.dart 0.0.2
+```
+
+This ensures the Dart CLI downloads the correct Rust binary from GitHub Releases. After bumping:
+1. Commit the changes
+2. Push a new tag (e.g., `git tag v0.0.2 && git push --tags`)
+3. GitHub Actions will automatically build and publish the Rust binaries.
