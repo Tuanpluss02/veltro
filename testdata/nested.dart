@@ -1,18 +1,20 @@
 import 'package:veltro/veltro.dart';
+
 part 'nested.g.dart';
 
 @Data()
-class Address {
-  const factory Address({
-    required String street,
-    required String city,
-  }) = _Address;
+abstract class Address with _$Address {
+  const factory Address({required String street, required String city}) =
+      _Address;
+
+  factory Address.fromJson(Map<String, dynamic> json) =>
+      _$AddressFromJson(json);
 }
 
 @Data()
-class Person {
-  const factory Person({
-    required String name,
-    required Address address,
-  }) = _Person;
+abstract class Person with _$Person {
+  const factory Person({required String name, required Address address}) =
+      _Person;
+
+  factory Person.fromJson(Map<String, dynamic> json) => _$PersonFromJson(json);
 }

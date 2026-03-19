@@ -29,8 +29,22 @@ pub fn analyze(parsed: &ParsedFile) -> Result<Vec<DataClassIR>, AnalyzeError> {
 }
 
 fn find_all_data_classes(node: Node, source: &str, path: &std::path::PathBuf, results: &mut Vec<DataClassIR>) -> Result<(), AnalyzeError> {
-    if node.kind() == "class_definition" && has_data_annotation(node, source) {
-        results.push(extract_data_class(node, source, path.clone())?);
+    if (node.kind() == "class_definition" || node.kind() == "class_declaration") && has_data_annotation(node, source) {
+        let name_node = node.child_by_field_name("name");
+        let class_name = name_node
+            .map(|n| n.utf8_text(source.as_bytes()).unwrap_or(""))
+            .unwrap_or("");
+        let expected_mixin = format!("_${}", class_name);
+        let class_text = node.utf8_text(source.as_bytes()).unwrap_or("");
+
+        if !has_with_mixin(class_text, &expected_mixin) {
+            eprintln!(
+                "  ⚠ {} skipped — missing `with _${}`. Add it to enable generation.",
+                class_name, class_name
+            );
+        } else {
+            results.push(extract_data_class(node, source, path.clone())?);
+        }
     }
     
     let mut cursor = node.walk();
@@ -41,12 +55,34 @@ fn find_all_data_classes(node: Node, source: &str, path: &std::path::PathBuf, re
     Ok(())
 }
 
+/// Checks whether the class text contains `with _$ClassName`.
+fn has_with_mixin(class_text: &str, expected_mixin: &str) -> bool {
+    if let Some(with_idx) = class_text.find("with") {
+        let after_with = &class_text[with_idx + 4..];
+        if let Some(brace_idx) = after_with.find('{') {
+            let mixin_section = &after_with[..brace_idx];
+            return mixin_section.contains(expected_mixin);
+        }
+        return after_with.contains(expected_mixin);
+    }
+    false
+}
+
 fn has_data_annotation(node: Node, source: &str) -> bool {
+    // Check own children (new grammar style)
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if (child.kind() == "annotation" || child.kind() == "metadata") && 
+           child.utf8_text(source.as_bytes()).unwrap_or("").trim() == "@Data()" {
+            return true;
+        }
+    }
+
     let mut prev = node.prev_sibling();
     while let Some(p) = prev {
         if p.kind() == "annotation" || p.kind() == "metadata" {
             let text = p.utf8_text(source.as_bytes()).unwrap_or("");
-            if text.contains("Data") {
+            if text.trim() == "@Data()" {
                 return true;
             }
         }
@@ -60,13 +96,20 @@ fn has_data_annotation(node: Node, source: &str) -> bool {
         for i in 0..parent.child_count() {
             let child = parent.child(i as u32).unwrap();
             if (child.kind() == "annotation" || child.kind() == "metadata") && 
-               child.utf8_text(source.as_bytes()).unwrap_or("").contains("Data") {
+               child.utf8_text(source.as_bytes()).unwrap_or("").trim() == "@Data()" {
                 return true;
             }
         }
     }
     
     false
+}
+
+/// Checks whether a class body contains a `factory ClassName.fromJson(...)` declaration.
+fn has_from_json_factory(node: Node, source: &str, class_name: &str) -> bool {
+    let class_text = node.utf8_text(source.as_bytes()).unwrap_or("");
+    let pattern = format!("{}.fromJson", class_name);
+    class_text.contains(&pattern)
 }
 
 fn extract_data_class(node: Node, source: &str, path: std::path::PathBuf) -> Result<DataClassIR, AnalyzeError> {
@@ -89,10 +132,13 @@ fn extract_data_class(node: Node, source: &str, path: std::path::PathBuf) -> Res
     let body = node.child_by_field_name("body")
         .ok_or_else(|| AnalyzeError::UnexpectedStructure("Class body not found".into()))?;
     
+    // Detect user-declared fromJson factory
+    let has_from_json = has_from_json_factory(body, source, &name);
+
     let mut fields = Vec::new();
     let mut cursor = body.walk();
     for member in body.children(&mut cursor) {
-        if let Some(f) = try_find_fields(member, source)? {
+        if let Some(f) = try_find_fields(member, source, &name)? {
             fields = f;
             break;
         }
@@ -103,10 +149,12 @@ fn extract_data_class(node: Node, source: &str, path: std::path::PathBuf) -> Res
         generics,
         fields,
         source_file: path,
+        has_from_json,
     })
 }
 
-fn try_find_fields(node: Node, source: &str) -> Result<Option<Vec<FieldIR>>, AnalyzeError> {
+/// Tries to find fields from a constructor, skipping `fromJson` factories.
+fn try_find_fields(node: Node, source: &str, class_name: &str) -> Result<Option<Vec<FieldIR>>, AnalyzeError> {
     let kind = node.kind();
     if kind == "constructor_signature" || 
        kind == "factory_constructor_declaration" || 
@@ -114,6 +162,11 @@ fn try_find_fields(node: Node, source: &str) -> Result<Option<Vec<FieldIR>>, Ana
        kind.contains("constructor") {
         let text = node.utf8_text(source.as_bytes()).unwrap_or("");
         if text.contains("factory") {
+            // Skip fromJson factory — it's not the primary constructor
+            let from_json_pattern = format!("{}.fromJson", class_name);
+            if text.contains(&from_json_pattern) {
+                return Ok(None);
+            }
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 if child.kind() == "formal_parameter_list" {
@@ -128,7 +181,7 @@ fn try_find_fields(node: Node, source: &str) -> Result<Option<Vec<FieldIR>>, Ana
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        if let Some(f) = try_find_fields(child, source)? {
+        if let Some(f) = try_find_fields(child, source, class_name)? {
             return Ok(Some(f));
         }
     }
@@ -245,6 +298,7 @@ mod tests {
         let ir = &irs[0];
         
         assert_eq!(ir.name, "User");
+        assert!(ir.has_from_json);
         assert_eq!(ir.fields.len(), 3);
         assert_eq!(ir.fields[0].name, "id");
         assert_eq!(ir.fields[0].type_name, "String");

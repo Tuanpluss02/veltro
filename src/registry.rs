@@ -54,7 +54,7 @@ impl TypeRegistry {
 
 fn collect_enums(node: Node, source: &str, registry: &DashMap<String, TypeKind>) {
     let kind = node.kind();
-    if kind == "enum_declaration" || (kind == "class_definition" && has_is_enum_annotation(node, source)) {
+    if kind == "enum_declaration" || ((kind == "class_definition" || kind == "class_declaration") && has_is_enum_annotation(node, source)) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
             if !name.is_empty() {
@@ -70,11 +70,20 @@ fn collect_enums(node: Node, source: &str, registry: &DashMap<String, TypeKind>)
 }
 
 fn has_is_enum_annotation(node: Node, source: &str) -> bool {
+    // Check own children (new grammar style)
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if (child.kind() == "annotation" || child.kind() == "metadata") && 
+           child.utf8_text(source.as_bytes()).unwrap_or("").trim() == "@IsEnum()" {
+            return true;
+        }
+    }
+
     let mut prev = node.prev_sibling();
     while let Some(p) = prev {
         if p.kind() == "annotation" || p.kind() == "metadata" {
             let text = p.utf8_text(source.as_bytes()).unwrap_or("");
-            if text.contains("IsEnum") {
+            if text.trim() == "@IsEnum()" {
                 return true;
             }
         }
@@ -89,7 +98,7 @@ fn has_is_enum_annotation(node: Node, source: &str) -> bool {
         for i in 0..parent.child_count() {
             let child = parent.child(i as u32).unwrap();
             if (child.kind() == "annotation" || child.kind() == "metadata") && 
-               child.utf8_text(source.as_bytes()).unwrap_or("").contains("IsEnum") {
+               child.utf8_text(source.as_bytes()).unwrap_or("").trim() == "@IsEnum()" {
                 return true;
             }
         }

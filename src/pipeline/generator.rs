@@ -15,7 +15,7 @@ pub fn generate(ir_list: &[DataClassIR]) -> String {
     let file_name = ir_list[0].source_file.file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("unknown.dart");
-    code.push_str(&format!("part of '{}';\n", file_name));
+    code.push_str(&format!("part of '{}';", file_name));
 
     for ir in ir_list {
         code.push('\n');
@@ -25,25 +25,51 @@ pub fn generate(ir_list: &[DataClassIR]) -> String {
             format!("<{}>", ir.generics.join(", "))
         };
 
-        // 3. _ClassName concrete class
-        code.push_str(&format!("class _{}{} extends {}{} {{\n", ir.name, generics_decl, ir.name, generics_decl));
+        // ── 3. Mixin ──────────────────────────────────────────────
+        code.push_str(&format!("\nmixin _${}{} {{\n", ir.name, generics_decl));
 
-        // Fields
+        // Abstract getters
         for field in &ir.fields {
             let type_str = get_type_string(field);
-            code.push_str(&format!("  final {} {};\n", type_str, field.name));
+            code.push_str(&format!("  {} get {};\n", type_str, field.name));
         }
         code.push('\n');
 
-        // 4. Constructor
+        // Method signatures — return type is public ClassName
+        code.push_str(&format!("  {}{} copyWith({{", ir.name, generics_decl));
+        for field in &ir.fields {
+            let type_str = get_type_string(field);
+            let type_name_no_q = type_str.trim_end_matches('?');
+            code.push_str(&format!("{}? {}, ", type_name_no_q, field.name));
+        }
+        code.push_str("});\n");
+
+        code.push_str("  Map<String, dynamic> toJson();\n");
+        code.push('\n');
+        code.push_str("  @override\n");
+        code.push_str("  String toString();\n");
+        code.push_str("}\n");
+
+        // ── 4. Concrete class ──────────────────────────────────────
+        code.push_str(&format!("\nclass _{}{} with _${}{} implements {}{} {{\n",
+            ir.name, generics_decl, ir.name, generics_decl, ir.name, generics_decl));
+
+        // Fields with @override
+        for field in &ir.fields {
+            let type_str = get_type_string(field);
+            code.push_str(&format!("  @override final {} {};\n", type_str, field.name));
+        }
+        code.push('\n');
+
+        // Constructor
         code.push_str(&format!("  const _{}({{\n", ir.name));
         for field in &ir.fields {
             let required = if field.is_required { "required " } else { "" };
             code.push_str(&format!("    {}this.{},\n", required, field.name));
         }
-        code.push_str("  });\n\n");
+        code.push_str("  });\n");
 
-        // 5. fromJson factory
+        // fromJson factory on _ClassName
         let from_json_params = if ir.generics.is_empty() {
             "".to_string()
         } else {
@@ -54,79 +80,77 @@ pub fn generate(ir_list: &[DataClassIR]) -> String {
                 .join("")
         };
 
-        code.push_str(&format!("  factory _{}.fromJson(Map<String, dynamic> json{}) {{\n", ir.name, from_json_params));
-        code.push_str(&format!("    return _{}(\n", ir.name));
+        code.push_str(&format!("\n  factory _{}.fromJson(Map<String, dynamic> json{}) => _{}(\n",
+            ir.name, from_json_params, ir.name));
         for field in &ir.fields {
             let line = generate_from_json_field(field);
-            code.push_str(&format!("      {},\n", line));
+            code.push_str(&format!("    {},\n", line));
         }
-        code.push_str("    );\n");
-        code.push_str("  }\n\n");
+        code.push_str("  );\n");
 
-        // 6. toJson method
-        code.push_str("  @override\n  Map<String, dynamic> toJson() {\n");
-        code.push_str("    return {\n");
-        for field in &ir.fields {
-            let val = match field.resolved_kind {
-                TypeKind::DataClass | TypeKind::Enum => format!("{}.toJson()", field.name),
-                _ => field.name.clone(),
-            };
-            code.push_str(&format!("      '{}': {},\n", field.name, val));
-        }
-        code.push_str("    };\n");
-        code.push_str("  }\n\n");
-
-        // 7. copyWith method
-        code.push_str(&format!("  @override\n  _{}{} copyWith({{\n", ir.name, generics_decl));
+        // copyWith — return type is public ClassName
+        code.push_str(&format!("\n  @override\n  {}{} copyWith({{\n", ir.name, generics_decl));
         for field in &ir.fields {
             let type_str = get_type_string(field);
             let type_name_no_q = type_str.trim_end_matches('?');
             code.push_str(&format!("    {}? {},\n", type_name_no_q, field.name));
         }
-        code.push_str("  }) {\n");
-        code.push_str(&format!("    return _{}(\n", ir.name));
+        code.push_str("  }) => _{}(\n".replace("{}", &ir.name).as_str());
         for field in &ir.fields {
-            code.push_str(&format!("      {}: {} ?? this.{},\n", field.name, field.name, field.name));
+            code.push_str(&format!("    {}: {} ?? this.{},\n", field.name, field.name, field.name));
         }
-        code.push_str("    );\n");
-        code.push_str("  }\n\n");
+        code.push_str("  );\n");
 
-        // 8. operator ==
-        code.push_str("  @override\n  bool operator ==(Object other) {\n");
-        code.push_str(&format!("    return identical(this, other) || (other is _{}{} && \n", ir.name, generics_decl));
-        let comparisons: Vec<String> = ir.fields.iter().map(|f| format!("other.{} == {}", f.name, f.name)).collect();
-        code.push_str(&format!("      {});\n", comparisons.join(" && ")));
-        code.push_str("  }\n\n");
-
-        // 9. hashCode
-        code.push_str("  @override\n  int get hashCode => Object.hashAll([\n");
+        // toJson
+        code.push_str("\n  @override\n  Map<String, dynamic> toJson() => {\n");
         for field in &ir.fields {
-            code.push_str(&format!("    {},\n", field.name));
+            let val = match field.resolved_kind {
+                TypeKind::DataClass => format!("{}.toJson()", field.name),
+                TypeKind::Enum => format!("{}.name", field.name),
+                _ => field.name.clone(),
+            };
+            code.push_str(&format!("    '{}': {},\n", field.name, val));
         }
-        code.push_str("  ]);\n\n");
+        code.push_str("  };\n");
 
-        // 10. toString
-        code.push_str("  @override\n  String toString() {\n");
-        let fields_str: Vec<String> = ir.fields.iter().map(|f| format!("{}: ${{{}}}", f.name, f.name)).collect();
-        code.push_str(&format!("    return '{}({})';\n", ir.name, fields_str.join(", ")));
-        code.push_str("  }\n");
-        code.push_str("}\n");
+        // operator ==
+        code.push_str(&format!("\n  @override\n  bool operator ==(Object other) =>\n    identical(this, other) ||\n    (other is _{}{}", ir.name, generics_decl));
+        for field in &ir.fields {
+            code.push_str(&format!(" && other.{} == {}", field.name, field.name));
+        }
+        code.push_str(");\n");
 
-        // Top-level helper for fromJson
-        code.push_str(&format!("\n{}{} _${}FromJson{}(Map<String, dynamic> json{}) {{\n", 
-            ir.name, generics_decl, ir.name, generics_decl, from_json_params));
-        let args = if ir.generics.is_empty() {
-            "".to_string()
-        } else {
-            ir.generics.iter().map(|g| format!(", fromJson{}", g)).collect::<Vec<_>>().join("")
-        };
-        code.push_str(&format!("  return _{}.fromJson(json{});\n", ir.name, args));
-        code.push_str("}\n");
+        // hashCode
+        code.push_str("\n  @override\n  int get hashCode => Object.hashAll([");
+        let field_names: Vec<&str> = ir.fields.iter().map(|f| f.name.as_str()).collect();
+        code.push_str(&field_names.join(", "));
+        code.push_str("]);\n");
+
+        // toString
+        let fields_str: Vec<String> = ir.fields.iter().map(|f| format!("{}: ${}", f.name, f.name)).collect();
+        code.push_str(&format!("\n  @override\n  String toString() => '{}({})';",
+            ir.name, fields_str.join(", ")));
+        code.push_str("\n}\n");
+
+        // ── 5. Top-level helper (only if has_from_json) ────────────
+        if ir.has_from_json {
+            let args = if ir.generics.is_empty() {
+                "".to_string()
+            } else {
+                ir.generics.iter().map(|g| format!(", fromJson{}", g)).collect::<Vec<_>>().join("")
+            };
+            code.push_str(&format!(
+                "\n{}{} _${}FromJson{}(Map<String, dynamic> json{}) =>\n  _{}.fromJson(json{});\n",
+                ir.name, generics_decl, ir.name, generics_decl, from_json_params,
+                ir.name, args
+            ));
+        }
     }
 
     code
 }
 
+/// Constructs the full type string for a field including generic args and nullability.
 fn get_type_string(field: &FieldIR) -> String {
     let mut s = field.type_name.clone();
     if !field.generic_args.is_empty() {
@@ -138,6 +162,7 @@ fn get_type_string(field: &FieldIR) -> String {
     s
 }
 
+/// Generates the fromJson expression for a single field.
 fn generate_from_json_field(field: &FieldIR) -> String {
     if field.is_generic_param {
         return format!("{}: fromJson{}(json['{}'])", field.name, field.type_name, field.name);
@@ -149,7 +174,7 @@ fn generate_from_json_field(field: &FieldIR) -> String {
             field.name, field.type_name, field.name
         ),
         TypeKind::Enum => format!(
-            "{}: {}Extension.fromJson(json['{}'] as String)",
+            "{}: {}.values.byName(json['{}'] as String)",
             field.name, field.type_name, field.name
         ),
         TypeKind::External => {
@@ -185,10 +210,112 @@ mod tests {
                 },
             ],
             source_file: PathBuf::from("user.dart"),
+            has_from_json: true,
         };
         
         let output = generate(&[ir]);
-        assert!(output.contains("class _User extends User"));
-        assert!(output.contains("id: json['id'] as String"));
+
+        // mixin
+        assert!(output.contains("mixin _$User {"), "Missing mixin declaration");
+        assert!(output.contains("String get id;"), "Missing abstract getter");
+        assert!(output.contains("User copyWith("), "Missing copyWith signature in mixin");
+        assert!(output.contains("Map<String, dynamic> toJson();"), "Missing toJson signature in mixin");
+
+        // concrete class
+        assert!(output.contains("class _User with _$User implements User {"), "Missing concrete class");
+        assert!(output.contains("@override final String id;"), "Missing @override field");
+        assert!(output.contains("factory _User.fromJson("), "Missing fromJson factory");
+
+        // top-level helper (has_from_json = true)
+        assert!(output.contains("User _$UserFromJson("), "Missing top-level helper");
+    }
+
+    #[test]
+    fn test_generate_no_from_json() {
+        let ir = DataClassIR {
+            name: "User".to_string(),
+            generics: vec![],
+            fields: vec![
+                FieldIR {
+                    name: "id".to_string(),
+                    type_name: "String".to_string(),
+                    generic_args: vec![],
+                    is_required: true,
+                    is_nullable: false,
+                    resolved_kind: TypeKind::External,
+                    is_generic_param: false,
+                },
+            ],
+            source_file: PathBuf::from("user.dart"),
+            has_from_json: false,
+        };
+        
+        let output = generate(&[ir]);
+        // helper must NOT be emitted
+        assert!(!output.contains("_$UserFromJson"), "Top-level helper should not be emitted when has_from_json is false");
+        // But mixin and concrete class should still be present
+        assert!(output.contains("mixin _$User {"), "Missing mixin");
+        assert!(output.contains("class _User with _$User implements User {"), "Missing concrete class");
+    }
+
+    #[test]
+    fn test_generate_enum_field() {
+        let ir = DataClassIR {
+            name: "User".to_string(),
+            generics: vec![],
+            fields: vec![
+                FieldIR {
+                    name: "status".to_string(),
+                    type_name: "Status".to_string(),
+                    generic_args: vec![],
+                    is_required: true,
+                    is_nullable: false,
+                    resolved_kind: TypeKind::Enum,
+                    is_generic_param: false,
+                },
+            ],
+            source_file: PathBuf::from("user.dart"),
+            has_from_json: true,
+        };
+
+        let output = generate(&[ir]);
+        assert!(output.contains("Status.values.byName(json['status'] as String)"), "Enum fromJson should use .values.byName()");
+        assert!(output.contains("'status': status.name"), "Enum toJson should use .name");
+    }
+
+    #[test]
+    fn test_generate_generic() {
+        let ir = DataClassIR {
+            name: "ApiResponse".to_string(),
+            generics: vec!["T".to_string()],
+            fields: vec![
+                FieldIR {
+                    name: "success".to_string(),
+                    type_name: "bool".to_string(),
+                    generic_args: vec![],
+                    is_required: true,
+                    is_nullable: false,
+                    resolved_kind: TypeKind::External,
+                    is_generic_param: false,
+                },
+                FieldIR {
+                    name: "data".to_string(),
+                    type_name: "T".to_string(),
+                    generic_args: vec![],
+                    is_required: true,
+                    is_nullable: false,
+                    resolved_kind: TypeKind::External,
+                    is_generic_param: true,
+                },
+            ],
+            source_file: PathBuf::from("api_response.dart"),
+            has_from_json: true,
+        };
+
+        let output = generate(&[ir]);
+        assert!(output.contains("mixin _$ApiResponse<T>"), "Missing generic mixin");
+        assert!(output.contains("class _ApiResponse<T> with _$ApiResponse<T> implements ApiResponse<T>"), "Missing generic concrete class");
+        assert!(output.contains("data: fromJsonT(json['data'])"), "Missing generic fromJson parameter usage");
+        assert!(output.contains("ApiResponse<T> _$ApiResponseFromJson<T>"), "Missing generic top-level helper");
     }
 }

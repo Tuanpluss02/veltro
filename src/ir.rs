@@ -11,6 +11,8 @@ pub struct DataClassIR {
     pub fields: Vec<FieldIR>,
     /// Path to the source file where this class is defined.
     pub source_file: PathBuf,
+    /// Whether the user declared `factory ClassName.fromJson(...)` in the class body.
+    pub has_from_json: bool,
 }
 
 /// Intermediate representation of a class field.

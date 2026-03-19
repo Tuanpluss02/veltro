@@ -40,6 +40,7 @@ mod tests {
                 is_generic_param: false,
             }],
             source_file: PathBuf::from("person.dart"),
+            has_from_json: true,
         };
 
         let resolved = resolve(ir, &registry);
@@ -62,6 +63,7 @@ mod tests {
                 is_generic_param: false,
             }],
             source_file: PathBuf::from("box.dart"),
+            has_from_json: false,
         };
 
         let resolved = resolve(ir, &registry);

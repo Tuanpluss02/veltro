@@ -7,3 +7,6 @@ repository: https://github.com/your-username/veltro
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
+
+dev_dependencies:
+  lints: ^5.1.1
