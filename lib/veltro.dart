@@ -84,11 +84,3 @@ class Default<T> {
   final T value;
   const Default(this.value);
 }
-
-/// Marks an external enum for Veltro type resolution.
-///
-/// Use when an enum is imported from another package and
-/// Veltro cannot detect it via the `enum` keyword in your source.
-class IsEnum {
-  const IsEnum();
-}

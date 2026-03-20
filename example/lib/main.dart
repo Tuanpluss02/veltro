@@ -256,6 +256,5 @@ void main() {
   print(
     'Perf: LargeRecord fromJson+copyWith x$iterations in ${sw2.elapsedMilliseconds}ms',
   );
-
   print('\nAll assertions passed. Veltro output is correct.');
 }
