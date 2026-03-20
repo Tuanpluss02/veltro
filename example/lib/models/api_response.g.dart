@@ -60,5 +60,8 @@ class _ApiResponse<T> with _$ApiResponse<T> implements ApiResponse<T> {
   String toString() => 'ApiResponse(success: $success, data: $data, message: $message)';
 }
 
-ApiResponse<T> _$ApiResponseFromJson<T>(Map<String, dynamic> json, T Function(Object?) fromJsonT) =>
-  _ApiResponse.fromJson(json, fromJsonT);
+extension _$ApiResponseJsonExtension<T> on ApiResponse<T> {
+  // ignore: unused_element
+  static ApiResponse<T> fromJson<T>(Map<String, dynamic> json, T Function(Object?) fromJsonT) =>
+      _ApiResponse<T>.fromJson(json, fromJsonT);
+}

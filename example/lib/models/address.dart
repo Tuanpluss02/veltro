@@ -2,7 +2,7 @@ import 'package:veltro/veltro.dart';
 
 part 'address.g.dart';
 
-@Data()
+@Veltro()
 abstract class Address with _$Address {
   const factory Address({
     required String street,
@@ -11,5 +11,5 @@ abstract class Address with _$Address {
   }) = _Address;
 
   factory Address.fromJson(Map<String, dynamic> json) =>
-      _$AddressFromJson(json);
+      _Address.fromJson(json);
 }

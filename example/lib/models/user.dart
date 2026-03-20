@@ -5,7 +5,7 @@ import 'status.dart';
 
 part 'user.g.dart';
 
-@Data()
+@Veltro()
 abstract class User with _$User {
   const factory User({
     required String id,
@@ -16,5 +16,5 @@ abstract class User with _$User {
     required Status status,
   }) = _User;
 
-  factory User.fromJson(Map<String, dynamic> json) => _$UserFromJson(json);
+  factory User.fromJson(Map<String, dynamic> json) => _User.fromJson(json);
 }

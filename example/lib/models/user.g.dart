@@ -81,5 +81,8 @@ class _User with _$User implements User {
   String toString() => 'User(id: $id, name: $name, age: $age, isVerified: $isVerified, address: $address, status: $status)';
 }
 
-User _$UserFromJson(Map<String, dynamic> json) =>
-  _User.fromJson(json);
+extension _$UserJsonExtension on User {
+  // ignore: unused_element
+  static User fromJson(Map<String, dynamic> json) =>
+      _User.fromJson(json);
+}

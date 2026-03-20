@@ -60,5 +60,8 @@ class _Address with _$Address implements Address {
   String toString() => 'Address(street: $street, city: $city, country: $country)';
 }
 
-Address _$AddressFromJson(Map<String, dynamic> json) =>
-  _Address.fromJson(json);
+extension _$AddressJsonExtension on Address {
+  // ignore: unused_element
+  static Address fromJson(Map<String, dynamic> json) =>
+      _Address.fromJson(json);
+}

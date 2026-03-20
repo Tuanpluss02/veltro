@@ -2,7 +2,7 @@ import 'package:veltro/veltro.dart';
 
 part 'api_response.g.dart';
 
-@Data()
+@Veltro()
 abstract class ApiResponse<T> with _$ApiResponse<T> {
   const factory ApiResponse({
     required bool success,
@@ -14,5 +14,5 @@ abstract class ApiResponse<T> with _$ApiResponse<T> {
     Map<String, dynamic> json,
     T Function(Object? json) fromJsonT,
   ) =>
-      _$ApiResponseFromJson(json, fromJsonT);
+      _ApiResponse.fromJson(json, fromJsonT);
 }
